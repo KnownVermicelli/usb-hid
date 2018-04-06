@@ -8,11 +8,15 @@ extern crate cortex_m;
 extern crate cortex_m_rtfm as rtfm;
 extern crate stm32f103xx_hal as hal;
 
+mod usb;
+
 use hal::prelude::*;
 use hal::stm32f103xx;
 
 use cortex_m::peripheral::syst::SystClkSource;
 use rtfm::{app, Threshold};
+
+use usb::enable_usb;
 
 app! {
 	device: stm32f103xx,
@@ -33,10 +37,12 @@ app! {
 			path: sys_tick,
 			resources: [ON, LED],
 		},
+		// Interrupt with wrong name in stm32f103xx crate
 		CAN1_TX: {
 			path: usb_high_priority_interrupt,
 			resources: [ON],
 		},
+		// Interrupt with wrong name in stm32f103xx crate
 		CAN1_RX0: {
 			path: usb_low_priority_interrupt,
 			resources: [ON],
@@ -44,27 +50,27 @@ app! {
 	}
 }
 
+fn enable_system_clock_interrupt(system_timer: &mut stm32f103xx::SYST) {
+	// configure the system timer to generate one interrupt every second
+	system_timer.set_clock_source(SystClkSource::Core);
+	system_timer.set_reload(8_000_000); // 1s
+	system_timer.clear_current();
+	system_timer.enable_interrupt();
+	system_timer.enable_counter();
+}
+
 fn init(mut p: init::Peripherals, r: init::Resources) -> init::LateResources {
 	// `init` can modify all the `resources` declared in `app!`
 	r.ON;
 
-	// power on GPIOC
-	p.device.RCC.apb2enr.modify(|_, w| w.iopcen().enabled());
+	enable_system_clock_interrupt(&mut p.core.SYST);
 
-	// configure PC13 as output
-	p.device.GPIOC.bsrr.write(|w| w.bs13().set());
-	p.device
-		.GPIOC
-		.crh
-		.modify(|_, w| w.mode13().output().cnf13().push());
+	// Reset and Clock registers
+	let mut rc = p.device.RCC;
 
-	// configure the system timer to generate one interrupt every second
-	p.core.SYST.set_clock_source(SystClkSource::Core);
-	p.core.SYST.set_reload(8_000_000); // 1s
-	p.core.SYST.enable_interrupt();
-	p.core.SYST.enable_counter();
+	enable_usb(&mut rc);
 
-	let mut rcc = p.device.RCC.constrain();
+	let mut rcc = rc.constrain();
 
 	let mut gpioc = p.device.GPIOC.split(&mut rcc.apb2);
 
@@ -85,7 +91,6 @@ fn idle() -> ! {
 //
 // `r` is the set of resources this task has access to. `SYS_TICK::Resources`
 // has one field per resource declared in `app!`.
-#[allow(unsafe_code)]
 fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
 	// toggle state
 	*r.ON = !*r.ON;
