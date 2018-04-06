@@ -1,8 +1,7 @@
-# `cortex-m-quickstart`
+# `usb-hid`
 
-> A template for building applications for ARM Cortex-M microcontrollers
-
-# [Documentation](https://docs.rs/cortex-m-quickstart)
+> Attempt to write usb hid for stm32f103 and then refactor it to abstract hardware away.
+# [Documentation]No documentation yet
 
 # License
 
