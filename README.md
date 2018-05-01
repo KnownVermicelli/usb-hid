@@ -28,5 +28,5 @@ You will need:
 - linux tools for building stm32 stuff. You can find instruction on japaric blog in "rust your arm microcontroller".
 
 Notes:
-- PA11 (USBDM) and PA12 (USBDP) are usb pins.
+- PA11 (USBDM / D-) and PA12 (USBDP / D+) are usb pins.
 - https://github.com/ah-/anne-key seems not to set any usb pins, so it's using defaults. should check how code in stm32f103xx crate works.
