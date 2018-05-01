@@ -7,6 +7,7 @@
 extern crate cortex_m;
 extern crate cortex_m_rtfm as rtfm;
 extern crate stm32f103xx_hal as hal;
+extern crate panic_abort;
 
 mod usb;
 
@@ -25,6 +26,7 @@ app! {
 	//
 	// Data resources are static variables that are safe to share across tasks
 	resources: {
+		
 		static ON: bool = false;
 		static LED: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>;
 	},

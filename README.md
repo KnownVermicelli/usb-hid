@@ -24,6 +24,7 @@ dual licensed as above, without any additional terms or conditions.
 
 You will need:
 - something to flash stm32. I'm using stm32flash: 	https://git.code.sf.net/p/stm32flash/code
+  -- stm32 -w out.bin -v /dev/ttyUSB0 # or whatever should be there
 - linux tools for building stm32 stuff. You can find instruction on japaric blog in "rust your arm microcontroller".
 
 Notes:

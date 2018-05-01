@@ -5,11 +5,13 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"isBuildTask": true,
-			"taskName": "xargo build",
-			"command": "Xargo",
+			"label": "cargo build",
+			"command": "cargo",
 			"args": [
-				"build"
+				"build",
+				"--release",
+				"--target0",
+				"thumbv7m-none-eabi"
 			],
 			"problemMatcher": [
 				"$rustc"

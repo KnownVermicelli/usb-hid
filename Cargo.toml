@@ -19,15 +19,17 @@ debug = true
 [dependencies]
 stm32f103xx-hal={ path="../stm32f103xx-hal/"}
 nb="0.1.1"
-cortex-m-rtfm="0.3.1"
+cortex-m-rtfm="0.3.2"
+panic-abort="*"
+cortex-m-rt="*"
 
 [dependencies.stm32f103xx]
 features = ["rt"]
-version = "0.8.0"
+version = "0.9.0"
 
 [dependencies.cortex-m]
-version = "0.4.0"
+version = "0.4.3"
 
-[dependencies.cortex-m-rt]
-version = "0.3.12"
-features = ["abort-on-panic"]
+# [dependencies.cortex-m-rt]
+# version = "0.3.12"
+
