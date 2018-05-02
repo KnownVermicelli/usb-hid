@@ -8,8 +8,12 @@ extern crate cortex_m;
 extern crate cortex_m_rtfm as rtfm;
 extern crate stm32f103xx_hal as hal;
 extern crate panic_abort;
+extern crate vcell;
+extern crate bare_metal;
 
 mod usb;
+mod descriptors;
+mod usb_impl;
 
 use hal::prelude::*;
 use hal::stm32f103xx;
@@ -17,7 +21,12 @@ use hal::stm32f103xx;
 use cortex_m::peripheral::syst::SystClkSource;
 use rtfm::{app, Threshold};
 
-use usb::enable_usb;
+use usb_impl::enable_usb;
+use usb::Usb;
+use usb_impl::UsbMem;
+
+
+
 
 app! {
 	device: stm32f103xx,
@@ -28,7 +37,9 @@ app! {
 	resources: {
 		
 		static ON: bool = false;
+		// this is considered LateResource - there is no initial value. It will be set in init function
 		static LED: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>;
+		static USB: Usb<UsbMem>;
 	},
 
 	// Tasks corresponding to hardware interrupts
@@ -40,14 +51,16 @@ app! {
 			resources: [ON, LED],
 		},
 		// Interrupt with wrong name in stm32f103xx crate
+		// Interrupt for both can_tx and usb_high_priority.
 		CAN1_TX: {
 			path: usb_high_priority_interrupt,
-			resources: [ON],
+			resources: [USB],
 		},
 		// Interrupt with wrong name in stm32f103xx crate
+		// Interrupt for both can_rx and usb_low_priority.
 		CAN1_RX0: {
 			path: usb_low_priority_interrupt,
-			resources: [ON],
+			resources: [USB],
 		},
 	}
 }
@@ -70,6 +83,7 @@ fn init(mut p: init::Peripherals, r: init::Resources) -> init::LateResources {
 	// Reset and Clock registers
 	let mut rc = p.device.RCC;
 
+	// enable usb interface. This is completely platform specific.
 	enable_usb(&mut rc);
 
 	let mut rcc = rc.constrain();
@@ -77,8 +91,9 @@ fn init(mut p: init::Peripherals, r: init::Resources) -> init::LateResources {
 	let mut gpioc = p.device.GPIOC.split(&mut rcc.apb2);
 
 	let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
-
-	init::LateResources { LED: led }
+	
+	let usb = Usb::new(UsbMem::new(), &descriptors::DEVICE_DESCRIPTOR);
+	init::LateResources { LED: led, USB: usb } 
 }
 
 fn idle() -> ! {
@@ -87,12 +102,6 @@ fn idle() -> ! {
 	}
 }
 
-// This is the task handler of the SYS_TICK exception
-//
-// `_t` is the preemption threshold token. We won't use it in this program.
-//
-// `r` is the set of resources this task has access to. `SYS_TICK::Resources`
-// has one field per resource declared in `app!`.
 fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
 	// toggle state
 	*r.ON = !*r.ON;
@@ -104,6 +113,10 @@ fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
 	}
 }
 
-fn usb_high_priority_interrupt(_t: &mut Threshold, mut _r: CAN1_TX::Resources) {}
+fn usb_high_priority_interrupt(_t: &mut Threshold, mut r: CAN1_TX::Resources) {
+	r.USB.interrupt_high_priority();
+}
 
-fn usb_low_priority_interrupt(_t: &mut Threshold, mut _r: CAN1_RX0::Resources) {}
+fn usb_low_priority_interrupt(_t: &mut Threshold, mut r: CAN1_RX0::Resources) {
+	r.USB.interrupt_low_priority();
+}

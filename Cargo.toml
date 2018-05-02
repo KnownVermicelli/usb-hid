@@ -22,6 +22,8 @@ nb="0.1.1"
 cortex-m-rtfm="0.3.2"
 panic-abort="*"
 cortex-m-rt="*"
+vcell="*"
+bare-metal="*"
 
 [dependencies.stm32f103xx]
 features = ["rt"]
