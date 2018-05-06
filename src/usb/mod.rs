@@ -15,7 +15,11 @@ pub trait UsbDevice {
 	fn get_index(&self) -> u16;
 	fn get_length(&self) -> u16;
 
+	fn get_configuration(&self) -> u8;
+
 	fn set_address(&mut self, u8);
+	fn set_configuration(&mut self, u8);
+	fn confirm_request(&mut self);
 }
 
 impl Usb {
@@ -45,19 +49,28 @@ impl Usb {
 		// Not sure if true but looks like all requests that expect return data
 		// has request_type value as 0x8Z (Z is anything).
 		match (request_type, request) {
+			// device level requests
 			(0x80, Request::GetStatus) => {
 				// Get status of device should return two bytes:
 				// D0 - set if selfpowered
 				// D1 - set if remote wakeup (can wakeup host during suspend)
 				// D2-D15 - reserved.
+
+				// TODO: respond with status.
 			}
 			(0x00, Request::ClearFeature) => {
 				// Clear feature
 				// value field hold feature selector
+
+				// TODO: do something here
+				ud.confirm_request();
 			}
 			(0x00, Request::SetFeature) => {
 				// Set feature
 				// value as above.
+
+				// TODO: do something here
+				ud.confirm_request();
 			}
 			(0x00, Request::SetAddress) => {
 				// Request sent during initial phase.
@@ -71,11 +84,63 @@ impl Usb {
 
 				// let address = ud.get_value() as u8;
 				// ud.set_address(address);
+				ud.confirm_request();
 			}
-			(0x80, Request::GetDescriptor) => {}
-			(0x00, Request::SetDescriptor) => {}
-			(0x80, Request::GetConfiguration) => {}
-			(0x00, Request::SetConfiguration) => {}
+			(0x80, Request::GetDescriptor) => {
+				// Request for device descriptor
+				// It is specified in value field.
+				// index field - Zero or languageID,
+				// length field - descriptor length
+			}
+			(0x00, Request::SetDescriptor) => {
+				// No idea what this request is supposed to do :)
+
+				// TODO: do something here
+				ud.confirm_request();
+			}
+			(0x80, Request::GetConfiguration) => {
+				// Requests current configuration.
+				// More important for devices with many configurations.
+				// Not configured device should response with 0u8.
+				// Configuration id otherwise.
+
+				// TODO: respond with current configuration
+			}
+			(0x00, Request::SetConfiguration) => {
+				// As above - more important for multiple-configurations devices.
+				// Sets configuration.
+				ud.set_configuration(ud.get_value() as u8);
+				ud.confirm_request();
+			}
+
+			// Interface level requests
+			// All interface level requests has written interface index
+			// in index fields.
+			// Index field:
+			//     D8-D15: reserved
+			//     D0-D7: interface number
+			(0x81, Request::GetStatus) => {
+				// Analogous to device level GetStatus
+				// both bytes of response are reserved for future use.
+				let response: [u8; 2] = [0, 0];
+				ud.set_response(&response);
+			}
+			(0x01, Request::ClearFeature) => {
+				// As above - basically not used.
+				ud.confirm_request();
+			}
+			(0x81, Request::GetInterface) => {
+				let response: u8 = 0;
+				// for now responsing with interface0
+				ud.set_response(&[response]);
+			}
+			(0x01, Request::SetInterface) => {
+				// as above
+				// more info: https://beyondlogic.org/usbnutshell/usb5.shtml#AlternateSetting
+				ud.confirm_request();
+			}
+
+			// endpoint level requests
 			(a, b) => panic!("Unknown request: {:?}, {:?}", a, b),
 		}
 	}
