@@ -109,7 +109,8 @@ impl Usb {
 			(0x00, Request::SetConfiguration) => {
 				// As above - more important for multiple-configurations devices.
 				// Sets configuration.
-				ud.set_configuration(ud.get_value() as u8);
+				let value = ud.get_value() as u8;
+				ud.set_configuration(value);
 				ud.confirm_request();
 			}
 

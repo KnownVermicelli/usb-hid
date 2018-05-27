@@ -21,9 +21,8 @@ stm32f103xx-hal={ path="../stm32f103xx-hal/"}
 nb="0.1.1"
 cortex-m-rtfm="0.3.2"
 panic-abort="*"
-cortex-m-rt="*"
+cortex-m-rt="0.3.0"
 vcell="*"
-bare-metal="*"
 
 [dependencies.stm32f103xx]
 features = ["rt"]
@@ -31,3 +30,7 @@ version = "0.9.0"
 
 [dependencies.cortex-m]
 version = "0.4.3"
+
+[dependencies.bare-metal]
+version = "0.1.2"
+# features = ["const-fn"]

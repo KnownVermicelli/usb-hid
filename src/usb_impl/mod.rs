@@ -41,6 +41,12 @@ impl UsbDevice for Stm32UsbDevice {
 	}
 
 	fn set_address(&mut self, _address: u8) {}
+
+	fn get_configuration(&self) -> u8 {
+		0
+	}
+	fn set_configuration(&mut self, _configuration: u8) {}
+	fn confirm_request(&mut self) {}
 }
 
 impl Stm32UsbDevice {
