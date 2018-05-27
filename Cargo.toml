@@ -2,7 +2,7 @@
 name = "usb-hid"
 version = "0.0.1"
 authors = ["Adam Winiarczuk <adam.winiarczuk@gmail.com>"]
-description = "stm32f103c856 usb hid"
+description = "stm32f103c8t6 usb hid"
 keywords = ["arm", "cortex-m"]
 categories = ["embedded", "no-std"]
 license = "MIT OR Apache-2.0"
