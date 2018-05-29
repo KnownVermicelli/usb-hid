@@ -37,7 +37,7 @@ app! {
         static ON: bool = false;
         // this is considered LateResource - there is no initial value. It will be set in init function
         static LED: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>;
-        static USB: Usb;
+        static USB: Usb<Stm32UsbDevice>;
     },
 
     // Tasks corresponding to hardware interrupts
@@ -88,9 +88,14 @@ fn init(mut p: init::Peripherals, r: init::Resources) -> init::LateResources {
 
     let mut gpioc = p.device.GPIOC.split(&mut rcc.apb2);
 
+    let dev_usb = p.device.USB;
+
     let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
 
-    let usb = Usb::new(&descriptors::DEVICE_DESCRIPTOR);
+    let usb = Usb::new(
+        &descriptors::DEVICE_DESCRIPTOR,
+        Stm32UsbDevice::new(dev_usb),
+    );
     init::LateResources { LED: led, USB: usb }
 }
 
@@ -112,11 +117,9 @@ fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
 }
 
 fn usb_high_priority_interrupt(_t: &mut Threshold, mut r: CAN1_TX::Resources) {
-    let mut usb_dev = Stm32UsbDevice::new();
-    r.USB.interrupt_high_priority(&mut usb_dev);
+    r.USB.interrupt_high_priority();
 }
 
 fn usb_low_priority_interrupt(_t: &mut Threshold, mut r: CAN1_RX0::Resources) {
-    let mut usb_dev = Stm32UsbDevice::new();
-    r.USB.interrupt_low_priority(&mut usb_dev);
+    r.USB.interrupt_low_priority();
 }

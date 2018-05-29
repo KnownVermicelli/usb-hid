@@ -1,10 +1,7 @@
 mod requests;
-pub struct Usb {
-	_device_descriptor: &'static [u8],
-}
 
 pub trait UsbDevice {
-	fn set_response(&mut self, &[u8]);
+	fn set_response(&mut self, &[u16]);
 
 	// 5 methods below are meant to query received request information.
 	// These things are part of each usb request as per specification (total 8 bytes).
@@ -22,26 +19,32 @@ pub trait UsbDevice {
 	fn confirm_request(&mut self);
 }
 
-impl Usb {
-	pub fn new(device_descriptor: &'static [u8]) -> Usb {
+pub struct Usb<UD: UsbDevice> {
+	_device_descriptor: &'static [u8],
+	ud: UD,
+}
+
+impl<UD: UsbDevice> Usb<UD> {
+	pub fn new(device_descriptor: &'static [u8], ud: UD) -> Usb<UD> {
 		Usb {
 			_device_descriptor: device_descriptor,
+			ud: ud,
 		}
 	}
 
-	pub fn interrupt_low_priority<UD: UsbDevice>(&mut self, ud: &mut UD) {
-		self.check_request(ud);
+	pub fn interrupt_low_priority(&mut self) {
+		self.check_request();
 	}
 
-	pub fn interrupt_high_priority<UD: UsbDevice>(&mut self, ud: &mut UD) {
-		self.check_request(ud);
+	pub fn interrupt_high_priority(&mut self) {
+		self.check_request();
 	}
 
-	fn check_request<UD: UsbDevice>(&mut self, ud: &mut UD) {
+	fn check_request(&mut self) {
 		use self::requests::Request;
 
-		let request_type = ud.get_request_type();
-		let request = requests::Request::from_u8(ud.get_request());
+		let request_type = self.ud.get_request_type();
+		let request = requests::Request::from_u8(self.ud.get_request());
 
 		// all request_type values below and their association with requests
 		// specified by USB specs. See: link at the top of this file.
@@ -56,6 +59,7 @@ impl Usb {
 				// D1 - set if remote wakeup (can wakeup host during suspend)
 				// D2-D15 - reserved.
 
+				self.ud.set_response(&[0]);
 				// TODO: respond with status.
 			}
 			(0x00, Request::ClearFeature) => {
@@ -63,14 +67,14 @@ impl Usb {
 				// value field hold feature selector
 
 				// TODO: do something here
-				ud.confirm_request();
+				self.ud.confirm_request();
 			}
 			(0x00, Request::SetFeature) => {
 				// Set feature
 				// value as above.
 
 				// TODO: do something here
-				ud.confirm_request();
+				self.ud.confirm_request();
 			}
 			(0x00, Request::SetAddress) => {
 				// Request sent during initial phase.
@@ -82,9 +86,9 @@ impl Usb {
 				// completion of the status stage.
 				// Probable source: https://beyondlogic.org/usbnutshell/usb4.shtml#Control
 
-				// let address = ud.get_value() as u8;
-				// ud.set_address(address);
-				ud.confirm_request();
+				// let address = self.ud.get_value() as u8;
+				// self.ud.set_address(address);
+				self.ud.confirm_request();
 			}
 			(0x80, Request::GetDescriptor) => {
 				// Request for device descriptor
@@ -96,7 +100,7 @@ impl Usb {
 				// No idea what this request is supposed to do :)
 
 				// TODO: do something here
-				ud.confirm_request();
+				self.ud.confirm_request();
 			}
 			(0x80, Request::GetConfiguration) => {
 				// Requests current configuration.
@@ -109,9 +113,9 @@ impl Usb {
 			(0x00, Request::SetConfiguration) => {
 				// As above - more important for multiple-configurations devices.
 				// Sets configuration.
-				let value = ud.get_value() as u8;
-				ud.set_configuration(value);
-				ud.confirm_request();
+				let value = self.ud.get_value() as u8;
+				self.ud.set_configuration(value);
+				self.ud.confirm_request();
 			}
 
 			// Interface level requests
@@ -123,22 +127,22 @@ impl Usb {
 			(0x81, Request::GetStatus) => {
 				// Analogous to device level GetStatus
 				// both bytes of response are reserved for future use.
-				let response: [u8; 2] = [0, 0];
-				ud.set_response(&response);
+				let response: [u16; 2] = [0, 0];
+				self.ud.set_response(&response);
 			}
 			(0x01, Request::ClearFeature) => {
 				// As above - basically not used.
-				ud.confirm_request();
+				self.ud.confirm_request();
 			}
 			(0x81, Request::GetInterface) => {
-				let response: u8 = 0;
+				let response: u16 = 0;
 				// for now responsing with interface0
-				ud.set_response(&[response]);
+				self.ud.set_response(&[response]);
 			}
 			(0x01, Request::SetInterface) => {
 				// as above
 				// more info: https://beyondlogic.org/usbnutshell/usb5.shtml#AlternateSetting
-				ud.confirm_request();
+				self.ud.confirm_request();
 			}
 
 			// endpoint level requests
