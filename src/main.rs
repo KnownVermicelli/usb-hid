@@ -52,13 +52,13 @@ app! {
         // Interrupt for both can_tx and usb_high_priority.
         CAN1_TX: {
             path: usb_high_priority_interrupt,
-            resources: [USB],
+            resources: [USB, LED],
         },
         // Interrupt with wrong name in stm32f103xx crate
         // Interrupt for both can_rx and usb_low_priority.
         CAN1_RX0: {
             path: usb_low_priority_interrupt,
-            resources: [USB],
+            resources: [USB, LED],
         },
     }
 }
@@ -109,17 +109,21 @@ fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
     // toggle state
     *r.ON = !*r.ON;
 
-    if *r.ON {
-        r.LED.set_high();
-    } else {
-        r.LED.set_low();
-    }
+    // if *r.ON {
+    //     r.LED.set_high();
+    // } else {
+    //     r.LED.set_low();
+    // }
 }
 
 fn usb_high_priority_interrupt(_t: &mut Threshold, mut r: CAN1_TX::Resources) {
+    r.LED.set_high();
     r.USB.interrupt_high_priority();
+    r.LED.set_low();
 }
 
 fn usb_low_priority_interrupt(_t: &mut Threshold, mut r: CAN1_RX0::Resources) {
+    r.LED.set_high();
     r.USB.interrupt_low_priority();
+    r.LED.set_low();
 }

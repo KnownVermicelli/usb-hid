@@ -70,6 +70,8 @@ const EP_TX_RX_VALID: u32 = (EP_TX_VALID | EP_RX_VALID);
 const EP_TX_STALL: u32 = 0x0010;
 const EP_STATUS_OUT: u32 = 0x0100;
 
+const MAX_PACKET_SIZE: u32 = 64;
+
 impl Stm32UsbDevice {
 	fn toggle(&self, mask: u32, val: u32, flags: u32) {
 		#[allow(unsafe_code)]
@@ -118,6 +120,32 @@ impl UsbDevice for Stm32UsbDevice {
 		self.set_mem(0x1, lenght_of_response);
 	}
 
+	fn should_reset(&self) -> bool {
+		//
+		self.usb.istr.read().reset().bit_is_set()
+	}
+
+	fn clear_reset(&mut self) {
+		self.usb.istr.modify(|_, w| w.ctr().clear_bit());
+	}
+
+	fn clear_transfer_flags(&mut self) {
+		self.usb
+			.istr
+			.modify(|_, w| w.susp().clear_bit().sof().clear_bit().esof().clear_bit());
+	}
+
+	fn connection_type(&self) -> bool {
+		self.usb.istr.read().dir().bit_is_set()
+	}
+	fn get_endpoint(&self) -> u8 {
+		self.usb.istr.read().ep_id().bits()
+	}
+
+	fn transfer_correct(&self) -> bool {
+		self.usb.istr.read().ctr().bit_is_set()
+	}
+
 	fn get_request_type(&self) -> u8 {
 		(self.get_mem(0x10) & 0xff) as u8
 	}
@@ -138,7 +166,12 @@ impl UsbDevice for Stm32UsbDevice {
 		self.get_mem(0x13)
 	}
 
-	fn set_address(&mut self, _address: u8) {}
+	fn set_address(&mut self, address: u8) {
+		#[allow(unsafe_code)]
+		self.usb
+			.daddr
+			.modify(|_, w| unsafe { w.add().bits(address) });
+	}
 
 	fn get_configuration(&self) -> u8 {
 		0
@@ -148,6 +181,54 @@ impl UsbDevice for Stm32UsbDevice {
 
 	fn confirm_request(&mut self) {
 		self.toggle_tx_stall();
+	}
+
+	fn confirm_tx(&mut self) {
+		self.toggle_tx_out();
+	}
+
+	fn confirm_response(&mut self) {
+		self.toggle_out();
+	}
+
+	fn reset_state(&mut self) {
+		// // clear pma area
+		let area = self.deref();
+		area.set_memory(0, 0x40);
+		area.set_memory(1, 0x0);
+		area.set_memory(2, 0x20);
+
+		area.set_memory(3, (0x8000 | ((MAX_PACKET_SIZE / 32) - 1) << 10) as u16);
+
+		area.set_memory(4, 0x100);
+		area.set_memory(5, 0x0);
+
+		#[allow(unsafe_code)]
+		self.usb.ep0r.modify(|_, w| unsafe {
+			w.ep_type()
+				.bits(0b01)
+				.stat_tx()
+				.bits(0b10)
+				.stat_rx()
+				.bits(0b11)
+		});
+
+		#[allow(unsafe_code)]
+		self.usb.ep1r.modify(|_, w| unsafe {
+			w.ep_type()
+				.bits(0b11)
+				.stat_tx()
+				.bits(0b11)
+				.stat_rx()
+				.bits(0b10)
+				.ea()
+				.bits(0b1)
+		});
+
+		self.usb.daddr.write(|w| w.ef().set_bit());
+
+		// self.device_state = UsbDeviceState::Default;
+		// reset endpoints registers
 	}
 }
 

@@ -3,6 +3,16 @@ mod requests;
 pub trait UsbDevice {
 	fn set_response(&mut self, &[u16]);
 
+	fn should_reset(&self) -> bool;
+	fn clear_reset(&mut self);
+
+	fn clear_transfer_flags(&mut self);
+
+	fn get_endpoint(&self) -> u8;
+
+	fn transfer_correct(&self) -> bool;
+
+	fn connection_type(&self) -> bool;
 	// 5 methods below are meant to query received request information.
 	// These things are part of each usb request as per specification (total 8 bytes).
 	// More information: https://beyondlogic.org/usbnutshell/usb6.shtml
@@ -17,29 +27,72 @@ pub trait UsbDevice {
 	fn set_address(&mut self, u8);
 	fn set_configuration(&mut self, u8);
 	fn confirm_request(&mut self);
+	fn confirm_response(&mut self);
+	fn confirm_tx(&mut self);
+
+	fn reset_state(&mut self);
 }
 
+// pub const MANUFACTURER_STR: [u16; 19] = [
+// 	0x0326, 0x0052, 0x75, 0x73, 0x74, 0x79, 0x20, 0x4d, 0x61, 0x6e, 0x75, 0x66, 0x61, 0x63, 0x74,
+// 	0x75, 0x72, 0x65, 0x72,
+// ];
+
 pub struct Usb<UD: UsbDevice> {
-	_device_descriptor: &'static [u8],
+	device_descriptor: &'static [u16],
 	ud: UD,
+	pending_address: u8,
 }
 
 impl<UD: UsbDevice> Usb<UD> {
-	pub fn new(device_descriptor: &'static [u8], ud: UD) -> Usb<UD> {
+	pub fn new(device_descriptor: &'static [u16], ud: UD) -> Usb<UD> {
 		Usb {
-			_device_descriptor: device_descriptor,
+			device_descriptor: device_descriptor,
 			ud: ud,
+			pending_address: 0,
 		}
 	}
 
 	pub fn interrupt_low_priority(&mut self) {
-		self.check_request();
+		self.check_interrupt();
 	}
 
 	pub fn interrupt_high_priority(&mut self) {
-		self.check_request();
+		self.check_interrupt();
 	}
 
+	fn check_interrupt(&mut self) {
+		if self.ud.should_reset() {
+			self.ud.reset_state();
+			self.ud.clear_reset();
+		}
+		self.ud.clear_transfer_flags();
+		if self.ud.transfer_correct() {
+			let endpoint = self.ud.get_endpoint();
+			match endpoint {
+				0 => self.control_connection(),
+				_ => self.check_user_request(),
+			}
+		}
+	}
+
+	fn check_user_request(&mut self) {
+		//
+	}
+
+	fn control_connection(&mut self) {
+		if self.ud.connection_type() {
+			self.check_request()
+		} else {
+			if self.pending_address != 0 {
+				self.ud.set_address(self.pending_address);
+				self.pending_address = 0;
+			} else {
+				//whatever
+			}
+			self.ud.confirm_tx();
+		}
+	}
 	fn check_request(&mut self) {
 		use self::requests::Request;
 
@@ -61,6 +114,7 @@ impl<UD: UsbDevice> Usb<UD> {
 
 				self.ud.set_response(&[0]);
 				// TODO: respond with status.
+				self.ud.confirm_response();
 			}
 			(0x00, Request::ClearFeature) => {
 				// Clear feature
@@ -86,7 +140,8 @@ impl<UD: UsbDevice> Usb<UD> {
 				// completion of the status stage.
 				// Probable source: https://beyondlogic.org/usbnutshell/usb4.shtml#Control
 
-				// let address = self.ud.get_value() as u8;
+				let address = self.ud.get_value() as u8;
+				self.pending_address = address;
 				// self.ud.set_address(address);
 				self.ud.confirm_request();
 			}
@@ -95,6 +150,8 @@ impl<UD: UsbDevice> Usb<UD> {
 				// It is specified in value field.
 				// index field - Zero or languageID,
 				// length field - descriptor length
+				self.ud.set_response(self.device_descriptor);
+				self.ud.confirm_response();
 			}
 			(0x00, Request::SetDescriptor) => {
 				// No idea what this request is supposed to do :)
@@ -109,6 +166,9 @@ impl<UD: UsbDevice> Usb<UD> {
 				// Configuration id otherwise.
 
 				// TODO: respond with current configuration
+				let conf = self.ud.get_configuration() as u16;
+				self.ud.set_response(&[conf]);
+				self.ud.confirm_response();
 			}
 			(0x00, Request::SetConfiguration) => {
 				// As above - more important for multiple-configurations devices.
@@ -129,6 +189,7 @@ impl<UD: UsbDevice> Usb<UD> {
 				// both bytes of response are reserved for future use.
 				let response: [u16; 2] = [0, 0];
 				self.ud.set_response(&response);
+				self.ud.confirm_response();
 			}
 			(0x01, Request::ClearFeature) => {
 				// As above - basically not used.
@@ -138,6 +199,7 @@ impl<UD: UsbDevice> Usb<UD> {
 				let response: u16 = 0;
 				// for now responsing with interface0
 				self.ud.set_response(&[response]);
+				self.ud.confirm_response();
 			}
 			(0x01, Request::SetInterface) => {
 				// as above
