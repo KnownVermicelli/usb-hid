@@ -1,11 +1,16 @@
+use super::hal;
 use super::usb::UsbDevice;
 ///
 /// Completely platform specific implementation.
 /// If you use other stm32 then address/gaps may differ.
 /// If you use something completely different then there may be no point in looking at this code.
 ///
+/// stm32f103 usb pma memory layout (super confusing):
+/// http://kevincuzner.com/2018/01/29/bare-metal-stm32-writing-a-usb-driver/#pma-stm32f103
+///
 use bare_metal::Peripheral;
 use core::marker::Send;
+use hal::prelude::*;
 use hal::stm32f103xx;
 use hal::stm32f103xx::USB;
 use vcell::VolatileCell;
@@ -20,7 +25,7 @@ fn creat_pma_memory() -> Peripheral<PmaMemory> {
 #[repr(C)]
 struct PmaMemory {
 	// there is actually only 256 fields, but are separated with gaps in the same size...
-	fields: [VolatileCell<u16>; 512],
+	fields: [VolatileCell<u32>; 256],
 }
 
 #[allow(unsafe_code)]
@@ -29,15 +34,14 @@ unsafe impl Send for PmaMemory {}
 impl PmaMemory {
 	fn set_memory(&self, index: usize, value: u16) {
 		assert!(index < 256);
-		let real_index = index * 2;
-		self.fields[real_index].set(value);
+		let previous_value = self.fields[index].get();
+		let new_value = (previous_value & 0xffff_0000) | value as u32;
+		self.fields[index].set(new_value);
 	}
 
 	fn get_memory(&self, index: usize) -> u16 {
 		assert!(index < 256);
-		let real_index = index * 2;
-
-		self.fields[real_index].get()
+		(self.fields[index].get() & 0x0000_ffff) as u16
 	}
 
 	fn set_from_buffer(&self, start_index: usize, values: &[u16]) {
@@ -54,6 +58,8 @@ impl PmaMemory {
 pub struct Stm32UsbDevice {
 	mem: Peripheral<PmaMemory>,
 	usb: USB,
+	#[allow(unused)]
+	led: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>,
 }
 #[allow(unsafe_code)]
 unsafe impl Send for Stm32UsbDevice {}
@@ -115,9 +121,13 @@ impl UsbDevice for Stm32UsbDevice {
 	fn set_response(&mut self, response: &[u16]) {
 		// writing response to pma buffer
 		self.set_from_buffer(0x20, response);
-		let lenght_of_response = response.len() as u16;
+		// let lenght_of_response = response.len() as u16;
 		// write length of response into response_length buffer area.
-		self.set_mem(0x1, lenght_of_response);
+
+		self.set_mem(1, 5); // lenght_of_response);
+		self.set_mem(2, 5); // lenght_of_response);
+
+		self.led.set_low();
 	}
 
 	fn should_reset(&self) -> bool {
@@ -233,10 +243,13 @@ impl UsbDevice for Stm32UsbDevice {
 }
 
 impl Stm32UsbDevice {
-	pub fn new(usb: USB) -> Stm32UsbDevice {
+	pub fn new(
+		usb: USB,
+		led: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>,
+	) -> Stm32UsbDevice {
 		#[allow(unsafe_code)]
 		let mem = creat_pma_memory();
-		Stm32UsbDevice { mem, usb }
+		Stm32UsbDevice { mem, usb, led }
 	}
 }
 

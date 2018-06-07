@@ -36,7 +36,6 @@ app! {
 
         static ON: bool = false;
         // this is considered LateResource - there is no initial value. It will be set in init function
-        static LED: hal::gpio::gpioc::PC13<hal::gpio::Output<hal::gpio::PushPull>>;
         static USB: Usb<Stm32UsbDevice>;
     },
 
@@ -46,19 +45,19 @@ app! {
         // Here we declare that we'll use the SYS_TICK exception as a task
         SYS_TICK: {
             path: sys_tick,
-            resources: [ON, LED],
+            resources: [ON],
         },
         // Interrupt with wrong name in stm32f103xx crate
         // Interrupt for both can_tx and usb_high_priority.
         CAN1_TX: {
             path: usb_high_priority_interrupt,
-            resources: [USB, LED],
+            resources: [USB],
         },
         // Interrupt with wrong name in stm32f103xx crate
         // Interrupt for both can_rx and usb_low_priority.
         CAN1_RX0: {
             path: usb_low_priority_interrupt,
-            resources: [USB, LED],
+            resources: [USB],
         },
     }
 }
@@ -88,15 +87,18 @@ fn init(mut p: init::Peripherals, r: init::Resources) -> init::LateResources {
 
     let mut gpioc = p.device.GPIOC.split(&mut rcc.apb2);
 
-    let dev_usb = p.device.USB;
+    let mut dev_usb = p.device.USB;
 
-    let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+    dev_usb.cntr.modify(|_, w| w.pdwn().set_bit());
+
+    let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+    led.set_high();
 
     let usb = Usb::new(
         &descriptors::DEVICE_DESCRIPTOR,
-        Stm32UsbDevice::new(dev_usb),
+        Stm32UsbDevice::new(dev_usb, led),
     );
-    init::LateResources { LED: led, USB: usb }
+    init::LateResources { USB: usb }
 }
 
 fn idle() -> ! {
@@ -117,13 +119,9 @@ fn sys_tick(_t: &mut Threshold, mut r: SYS_TICK::Resources) {
 }
 
 fn usb_high_priority_interrupt(_t: &mut Threshold, mut r: CAN1_TX::Resources) {
-    r.LED.set_high();
     r.USB.interrupt_high_priority();
-    r.LED.set_low();
 }
 
 fn usb_low_priority_interrupt(_t: &mut Threshold, mut r: CAN1_RX0::Resources) {
-    r.LED.set_high();
     r.USB.interrupt_low_priority();
-    r.LED.set_low();
 }

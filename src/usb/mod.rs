@@ -39,7 +39,7 @@ pub trait UsbDevice {
 // ];
 
 pub struct Usb<UD: UsbDevice> {
-	device_descriptor: &'static [u16],
+	_device_descriptor: &'static [u16],
 	ud: UD,
 	pending_address: u8,
 }
@@ -47,7 +47,7 @@ pub struct Usb<UD: UsbDevice> {
 impl<UD: UsbDevice> Usb<UD> {
 	pub fn new(device_descriptor: &'static [u16], ud: UD) -> Usb<UD> {
 		Usb {
-			device_descriptor: device_descriptor,
+			_device_descriptor: device_descriptor,
 			ud: ud,
 			pending_address: 0,
 		}
@@ -62,6 +62,7 @@ impl<UD: UsbDevice> Usb<UD> {
 	}
 
 	fn check_interrupt(&mut self) {
+		self.ud.set_response(&self._device_descriptor);
 		if self.ud.should_reset() {
 			self.ud.reset_state();
 			self.ud.clear_reset();
@@ -150,8 +151,9 @@ impl<UD: UsbDevice> Usb<UD> {
 				// It is specified in value field.
 				// index field - Zero or languageID,
 				// length field - descriptor length
-				self.ud.set_response(self.device_descriptor);
-				self.ud.confirm_response();
+				let p = [0, 1, 2, 3];
+				self.ud.set_response(&p);
+				//self.ud.confirm_response();
 			}
 			(0x00, Request::SetDescriptor) => {
 				// No idea what this request is supposed to do :)
